@@ -1,4 +1,3 @@
-```markdown
 # 《日本麻将完全攻略》
 
 ## 1. 大局观
@@ -7953,8 +7952,6 @@ Michael LaFargue在《Tao and Method》中强调，理解《道德经》需要�
 愿你在麻将的世界里，既能享受博弈的乐趣，也能感悟人生的智慧。
 
 **——全书完——**
-
-```
 
 ```bibtex
 @book{chen2018laozi,
