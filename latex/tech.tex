@@ -1,0 +1,268 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{\textbf{UMI: Universal Mahjong Interface Protocol}\\
+\large A Communication Protocol for Japanese Riichi Mahjong Engines\\
+Version 1.0 Specification}
+\author{
+    \textbf{Protocol Design Committee}\\
+    Research Institute of Computer Games\\
+    \texttt{umi-spec@riichi.org}
+}
+\date{March 2025}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    frame=single,
+    breaklines=true,
+    showstringspaces=false
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document specifies the Universal Mahjong Interface (UMI) protocol, a text-based communication standard for Japanese Riichi Mahjong engines and user interfaces. Inspired by the Universal Chess Interface (UCI), UMI enables interoperability between different Mahjong AI engines and graphical or command-line interfaces. The protocol supports local gameplay via named pipes, networked gameplay via TCP sockets, and decentralized peer-to-peer discovery via WebSocket over Distributed Hash Table (DHT) networks. We present the complete command set, state representation, move notation, and network architecture for building distributed Mahjong playing systems.
+\end{abstract}
+
+\section{Introduction}
+
+Japanese Riichi Mahjong is a complex four-player game of incomplete information, featuring intricate scoring rules (yaku), tile interactions (calls), and strategic depth. Unlike chess, which is two-player and perfect-information, Mahjong presents unique challenges for protocol design: simultaneous actions, hidden information, multiple win conditions, and four-way interaction.
+
+The Universal Mahjong Interface (UMI) addresses these challenges by providing:
+\begin{itemize}
+    \item \textbf{Stateless engine design}: Engines receive complete game state on each decision
+    \item \textbf{Multi-transport support}: Named pipes, TCP sockets, and WebSocket/DHT
+    \item \textbf{Decentralized matchmaking}: Peer discovery without central servers
+    \item \textbf{Complete information hiding}: Protocol respects Mahjong's hidden hand nature
+\end{itemize}
+
+\section{Protocol Architecture}
+
+\subsection{Design Philosophy}
+
+Following UCI's successful model, UMI delegates game state management to the interface (GUI/CLI), while engines focus purely on decision-making. The interface acts as an arbiter, managing:
+\begin{itemize}
+    \item Tile wall generation and distribution
+    \item Turn management and timing
+    \item Scoring calculation and application
+    \item Game history and replay generation
+\end{itemize}
+
+\subsection{Transport Layers}
+
+UMI supports three transport mechanisms:
+
+\subsubsection{Named Pipes (Local)}
+Unix named pipes (FIFOs) for local engine communication. Ideal for engine testing and single-machine play.
+
+\subsubsection{TCP Sockets (LAN)}
+Direct TCP connections for local network play. Supports client-server and peer-to-peer topologies.
+
+\subsubsection{WebSocket/DHT (Internet)}
+Decentralized peer discovery using Kademlia DHT with WebSocket signaling for NAT traversal and global matchmaking.
+
+\section{Protocol Commands}
+
+\subsection{Engine to GUI}
+
+\begin{lstlisting}
+id name <x>
+id author <x>
+id version <x>
+umiok
+readyok
+info <property> <value>
+bestmove <move>
+error <message>
+\end{lstlisting}
+
+\subsection{GUI to Engine}
+
+\begin{lstlisting}
+umi
+isready
+setoption name <id> [value <x>]
+position <gamestate>
+go [wtime <ms>] [btime <ms>] [byoyomi <ms>]
+stop
+quit
+\end{lstlisting}
+
+\section{Game State Representation}
+
+\subsection{Tile Encoding}
+
+Tiles use a 34-base notation with suit indicators:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Notation} & \textbf{Meaning} \\
+\midrule
+m1-m9 & Manzu (Characters) 1-9 \\
+p1-p9 & Pinzu (Circles) 1-9 \\
+s1-s9 & Souzu (Bamboo) 1-9 \\
+E, S, W, N & Winds (East, South, West, North) \\
+W, G, R & Dragons (White, Green, Red) \\
+\bottomrule
+\end{tabular}
+\caption{UMI Tile Notation}
+\end{table}
+
+\subsection{Position Command Format}
+
+\begin{lstlisting}
+position <round> <honba> <kyoutaku> <dealer> <dora> <uradora>
+    hands <p1> <p2> <p3> <p4>
+    discards <p1> <p2> <p3> <p4>
+    calls <p1> <p2> <p3> <p4>
+    wall <remaining>
+    turn <player>
+\end{lstlisting}
+
+Example:
+\begin{lstlisting}
+position E1 0 0 0 m5
+    hands 136m7p89sEENWW 247m25p349sGG
+            89m13p67sRRWSS 35m89p12sNNWW
+    discards m1,p2,s3,E  ,  ,  
+    calls    ,  ,  ,  
+    wall 52
+    turn 1
+\end{lstlisting}
+
+\section{Move Notation}
+
+\subsection{Action Types}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Move} & \textbf{Format} & \textbf{Description} \\
+\midrule
+Discard & d<t> & Discard tile t \\
+Riichi & r<t> & Declare riichi, discard t \\
+Tsumo & t & Self-draw win \\
+Ron & ron<p><t> & Win on player p's discard t \\
+Pon & pon<p><t><t2> & Call pon on p's t, using t2 from hand \\
+Chi & chi<p><t><t1><t2> & Call chi sequence \\
+Kan & kan<p><t><t><t><t> & Open/closed kan \\
+Pass & p & No action \\
+\bottomrule
+\end{tabular}
+\caption{UMI Move Notation}
+\end{table}
+
+\section{DHT-Based Peer Discovery}
+
+\subsection{Kademlia Integration}
+
+UMI uses a modified Kademlia DHT for decentralized peer discovery:
+
+\begin{algorithm}
+\caption{UMI Peer Discovery via DHT}
+\begin{algorithmic}[1]
+\Procedure{JoinNetwork}{bootstrapNodes}
+    \State nodeId $\leftarrow$ SHA256(publicKey)
+    \State routingTable $\leftarrow$ InitializeKBucket(nodeId)
+    \For{each node in bootstrapNodes}
+        \State \Call{Ping}{node}
+        \State \Call{FindNode}{node, nodeId}
+    \EndFor
+    \State \Call{RefreshBuckets}{}
+\EndProcedure
+
+\Procedure{FindGame}{gameParams}
+    \State gameKey $\leftarrow$ \Call{SHA256}{gameParams.rating + gameParams.rules}
+    \State closestNodes $\leftarrow$ \Call{Lookup}{gameKey}
+    \For{each node in closestNodes}
+        \State peers $\leftarrow$ \Call{GetPeers}{node, gameKey}
+        \If{peers.found}
+            \State \Return \Call{ConnectWebSocket}{peers.address}
+        \EndIf
+    \EndFor
+    \State \Call{Announce}{gameKey, myAddress}
+    \State \Return \text{WAITING}
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{WebSocket Signaling}
+
+Once peers are discovered via DHT, WebSocket provides the actual game transport:
+
+\begin{lstlisting}
+// Connection establishment
+WS /umi/v1/game/{gameId}
+
+// Message format (JSON)
+{
+    "type": "move",
+    "player": 0,
+    "move": "d7m",
+    "timestamp": 1712345678901,
+    "signature": "base64sig"
+}
+\end{lstlisting}
+
+\section{Security Considerations}
+
+\subsection{Move Verification}
+
+All moves are cryptographically signed using Ed25519. The game state hash chain prevents tampering:
+
+\begin{equation}
+H_n = SHA256(H_{n-1} || move_n || timestamp_n || signature_n)
+\end{equation}
+
+\subsection{Sybil Resistance}
+
+DHT node IDs require proof-of-work to prevent Sybil attacks:
+
+\begin{equation}
+SHA256(nodeId || nonce) < 2^{256 - difficulty}
+\end{equation}
+
+\section{Implementation Reference}
+
+\subsection{State Machine}
+
+The UMI engine operates as a finite state machine:
+
+\begin{itemize}
+    \item \textbf{IDLE}: Waiting for position command
+    \item \textbf{THINKING}: Calculating best move
+    \item \textbf{PONDERING}: Opponent's turn, background calculation
+    \item \textbf{STOPPED}: Calculation interrupted
+\end{itemize}
+
+\section{Conclusion}
+
+UMI provides a robust, extensible protocol for Japanese Mahjong engine communication. By supporting local pipes, TCP sockets, and decentralized DHT/WebSocket networking, it enables use cases ranging from local AI development to global peer-to-peer tournament play without centralized infrastructure.
+
+\begin{thebibliography}{9}
+\bibitem{uci} Meyer-Kahlen, S. (2000). Universal Chess Interface. Shredder Computer Chess.
+\bibitem{kademlia} Maymounkov, P., \& Mazieres, D. (2002). Kademlia: A peer-to-peer information system based on the XOR metric. IPTPS.
+\bibitem{riichi} World Riichi Championship Rules (2022). Standardized Mahjong Rules.
+\end{thebibliography}
+
+\end{document}
