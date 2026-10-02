@@ -1,3 +1,5 @@
+[Written by deepseek](https://chat.deepseek.com/share/effwkuiulp2zyxrvx5)
+
 # 《日本麻将完全攻略》
 
 ## 1. 大局观
